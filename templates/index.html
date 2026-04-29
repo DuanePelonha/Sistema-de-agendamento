@@ -173,13 +173,24 @@ let calendar = null;
 
 function carregarUsuario() {
     fetch('/usuario')
-    .then(r => r.json())
+    .then(r => {
+        if (r.status === 401) {
+            window.location.href = '/login-page';
+            return null;
+        }
+        return r.json();
+    })
     .then(u => {
+        if (!u) return;
+
         document.getElementById('usuario-info').innerText =
             `Dr. ${u.nome} - OAB ${u.oab}/${u.estado}`;
+    })
+    .catch(() => {
+        document.getElementById('usuario-info').innerText =
+            'Erro ao carregar usuário';
     });
 }
-
 function carregarContador() {
     fetch('/contador')
     .then(r => r.json())
