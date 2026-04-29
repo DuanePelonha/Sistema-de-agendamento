@@ -147,48 +147,58 @@ def cadastro_page():
 
 @app.route("/cadastro", methods=["POST"])
 def cadastro():
+    nome = request.form["nome"].strip()
+    email = request.form["email"].strip().lower()
+    senha = request.form["senha"].strip()
+    oab = request.form["oab"].strip()
+    estado = request.form["estado"].strip().upper()
+    cidade = request.form["cidade"].strip()
+    telefone = request.form["telefone"].strip()
+
     conn = conectar()
     cursor = conn.cursor()
 
     try:
         cursor.execute("""
-        INSERT INTO advogados (nome,email,senha,oab,estado,cidade,telefone)
-        VALUES (?,?,?,?,?,?,?)
-        """, (
-            request.form["nome"],
-            request.form["email"],
-            request.form["senha"],
-            request.form["oab"],
-            request.form["estado"],
-            request.form["cidade"],
-            request.form["telefone"]
-        ))
+            INSERT INTO advogados
+            (nome, email, senha, oab, estado, cidade, telefone)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (nome, email, senha, oab, estado, cidade, telefone))
+
         conn.commit()
-    except:
-        return "Email já cadastrado"
+
+    except sqlite3.IntegrityError:
+        conn.close()
+        return "<script>alert('Email já cadastrado'); window.location='/cadastro-page';</script>"
 
     conn.close()
-    return redirect("/login-page")
+    return "<script>alert('Cadastro realizado com sucesso!'); window.location='/login-page';</script>"
 
 @app.route("/login", methods=["POST"])
 def login():
+    email = request.form["email"].strip().lower()
+    senha = request.form["senha"].strip()
+
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM advogados WHERE email=? AND senha=?",
-                   (request.form["email"], request.form["senha"]))
+    cursor.execute("""
+        SELECT id, nome, oab, estado
+        FROM advogados
+        WHERE email = ? AND senha = ?
+    """, (email, senha))
 
-    user = cursor.fetchone()
+    usuario = cursor.fetchone()
     conn.close()
 
-    if user:
-        session["usuario_id"] = user[0]
-        session["nome"] = user[1]
-        session["oab"] = user[4]
-        session["estado"] = user[5]
+    if usuario:
+        session["usuario_id"] = usuario[0]
+        session["nome"] = usuario[1]
+        session["oab"] = usuario[2]
+        session["estado"] = usuario[3]
         return redirect("/")
 
-    return "Login inválido"
+    return "<script>alert('Login inválido. Verifique email e senha.'); window.location='/login-page';</script>"
 
 @app.route("/logout")
 def logout():
