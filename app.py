@@ -291,6 +291,29 @@ def lista():
     conn.close()
     return jsonify(eventos)
 
+@app.route("/corrigir-salas")
+def corrigir_salas():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM salas")
+
+    salas = [(f"Coworking {i:02d}",) for i in range(1, 8)]
+    salas += [
+        ("Sala de Reunião",),
+        ("Escritório 01",),
+        ("Escritório 02",),
+        ("Sala de Audiência",),
+        ("Auditório",)
+    ]
+
+    cursor.executemany("INSERT INTO salas (nome) VALUES (?)", salas)
+
+    conn.commit()
+    conn.close()
+
+    return "Salas corrigidas com sucesso!"
+
 if __name__ == "__main__":
     inicializar_banco()
     app.run(debug=True)
