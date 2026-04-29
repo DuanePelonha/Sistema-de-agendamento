@@ -124,7 +124,7 @@ input, select {
 
         <label>Sala</label>
         <select id="sala_id" onchange="calcularHorarioFinal()">
-            <option value="">Selecione a sala</option>
+            <option value="">Carregando salas...</option>
         </select>
 
         <label>Horário de início</label>
@@ -165,11 +165,11 @@ input, select {
         <button onclick="fecharModalCancelar()">Voltar</button>
     </div>
 </div>
-<script>
 
-let agendamentoSelecionado = null;
+<script>
 let diaSelecionado = null;
 let calendar = null;
+let agendamentoSelecionado = null;
 
 function carregarUsuario() {
     fetch('/usuario')
@@ -191,12 +191,17 @@ function carregarUsuario() {
             'Erro ao carregar usuário';
     });
 }
+
 function carregarContador() {
     fetch('/contador')
     .then(r => r.json())
     .then(d => {
         document.getElementById('contador').innerText =
-            `Usados: ${d.usados}/${d.limite} | Restam: ${d.restantes}`;
+            `Você usou ${d.usados} de ${d.limite}. Restam ${d.restantes}`;
+    })
+    .catch(() => {
+        document.getElementById('contador').innerText =
+            'Erro ao carregar contador';
     });
 }
 
@@ -207,11 +212,20 @@ function carregarSalas() {
         const select = document.getElementById('sala_id');
         select.innerHTML = '<option value="">Selecione a sala</option>';
 
+        if (!salas || salas.length === 0) {
+            select.innerHTML = '<option value="">Nenhuma sala cadastrada</option>';
+            return;
+        }
+
         salas.forEach(sala => {
             select.innerHTML += `
                 <option value="${sala[0]}">${sala[1]}</option>
             `;
         });
+    })
+    .catch(() => {
+        const select = document.getElementById('sala_id');
+        select.innerHTML = '<option value="">Erro ao carregar salas</option>';
     });
 }
 
@@ -258,6 +272,8 @@ function abrirModal(data) {
     document.getElementById('diaSelecionadoTexto').innerText =
         `Dia selecionado: ${dataFormatada}`;
 
+    carregarSalas();
+
     document.getElementById('modalAgendamento').style.display = 'flex';
 }
 
@@ -285,9 +301,7 @@ function salvarAgendamento() {
 
     fetch('/agendar', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             sala_id: salaId,
             data_inicio: dataInicio,
@@ -312,6 +326,7 @@ function salvarAgendamento() {
         alert('Erro ao realizar agendamento.');
     });
 }
+
 function abrirModalCancelar(evento) {
     agendamentoSelecionado = evento.id;
 
@@ -375,22 +390,13 @@ document.addEventListener('DOMContentLoaded', function() {
             abrirModal(info.dateStr);
         },
 
-eventClick: function(info) {
-    abrirModalCancelar(info.event);
-}
+        eventClick: function(info) {
+            abrirModalCancelar(info.event);
+        }
     });
 
     calendar.render();
 });
-
-function carregarContador() {
-    fetch('/contador')
-    .then(r => r.json())
-    .then(d => {
-        document.getElementById('contador').innerText =
-            `Você usou ${d.usados} de ${d.limite}. Restam ${d.restantes}`;
-    });
-}
 </script>
 
 </body>
