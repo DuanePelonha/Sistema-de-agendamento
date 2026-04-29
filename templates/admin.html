@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Painel Administrador</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f7fa;
+}
+
+.topo {
+    background: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #ddd;
+}
+
+.container {
+    padding: 20px;
+}
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.card h3 {
+    margin: 0;
+    color: #555;
+}
+
+.card strong {
+    font-size: 32px;
+    color: #0078d4;
+}
+
+.filtros {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+input, select {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+th {
+    background: #f0f3f6;
+}
+
+.btn-cancelar {
+    background: #d13438;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-sair {
+    background: #0078d4;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topo">
+    <div>
+        <h1>Painel Administrador</h1>
+        <p>Casa da Advocacia Hélio Xavier de Vasconcelos</p>
+    </div>
+
+    <button class="btn-sair" onclick="window.location.href='/admin-logout'">
+        Sair
+    </button>
+</div>
+
+<div class="container">
+
+    <div class="cards">
+        <div class="card">
+            <h3>Total de Agendamentos</h3>
+            <strong id="total">0</strong>
+        </div>
+
+        <div class="card">
+            <h3>Ativos</h3>
+            <strong id="ativos">0</strong>
+        </div>
+
+        <div class="card">
+            <h3>Cancelados</h3>
+            <strong id="cancelados">0</strong>
+        </div>
+
+        <div class="card">
+            <h3>Advogados</h3>
+            <strong id="advogados">0</strong>
+        </div>
+    </div>
+
+    <div class="card">
+
+<button class="btn-sair" onclick="window.location.href='/admin/exportar'">
+    Exportar CSV
+</button>
+
+        <h2>Agendamentos</h2>
+
+        <div class="filtros">
+            <input id="busca" placeholder="Buscar advogado ou sala" onkeyup="renderizarTabela()">
+
+            <select id="filtroStatus" onchange="renderizarTabela()">
+                <option value="">Todos</option>
+                <option value="ativo">Ativos</option>
+                <option value="cancelado">Cancelados</option>
+            </select>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Advogado</th>
+                    <th>OAB</th>
+                    <th>Sala</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Status</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="tabela"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+let agendamentos = [];
+
+function carregarAgendamentos() {
+    fetch('/admin/agendamentos')
+    .then(r => r.json())
+    .then(dados => {
+        agendamentos = dados;
+        atualizarCards();
+        renderizarTabela();
+    });
+}
+
+function atualizarCards() {
+    const total = agendamentos.length;
+    const ativos = agendamentos.filter(a => a[7] === 'ativo').length;
+    const cancelados = agendamentos.filter(a => a[7] === 'cancelado').length;
+
+    const nomesAdvogados = new Set(agendamentos.map(a => a[1]));
+
+    document.getElementById('total').innerText = total;
+    document.getElementById('ativos').innerText = ativos;
+    document.getElementById('cancelados').innerText = cancelados;
+    document.getElementById('advogados').innerText = nomesAdvogados.size;
+}
+
+function renderizarTabela() {
+    const tabela = document.getElementById('tabela');
+    const busca = document.getElementById('busca').value.toLowerCase();
+    const status = document.getElementById('filtroStatus').value;
+
+    tabela.innerHTML = '';
+
+    agendamentos
+    .filter(item => {
+        const texto = `${item[1]} ${item[4]}`.toLowerCase();
+        const passaBusca = texto.includes(busca);
+        const passaStatus = status === '' || item[7] === status;
+
+        return passaBusca && passaStatus;
+    })
+    .forEach(item => {
+        tabela.innerHTML += `
+            <tr>
+                <td>${item[0]}</td>
+                <td>${item[1]}</td>
+                <td>${item[2]}/${item[3]}</td>
+                <td>${item[4]}</td>
+                <td>${formatarData(item[5])}</td>
+                <td>${formatarData(item[6])}</td>
+                <td>${item[7]}</td>
+                <td>
+                    ${
+                        item[7] === 'ativo'
+                        ? `<button class="btn-cancelar" onclick="cancelar(${item[0]})">Cancelar</button>`
+                        : 'Cancelado'
+                    }
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function cancelar(id) {
+    if (!confirm('Deseja cancelar este agendamento?')) return;
+
+    fetch('/admin/cancelar/' + id, {
+        method: 'POST'
+    })
+    .then(r => r.json())
+    .then(d => {
+        alert(d.mensagem || d.erro);
+        carregarAgendamentos();
+    });
+}
+
+function formatarData(data) {
+    const d = new Date(data);
+    return d.toLocaleString('pt-BR');
+}
+
+window.onload = carregarAgendamentos;
+</script>
+
+</body>
+</html>

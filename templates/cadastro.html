@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Advogado</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f3f5f7;
+            min-height: 100vh;
+        }
+
+        .top-banner {
+            width: 100%;
+            height: 180px;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .top-banner img {
+            max-width: 500px;
+            width: 90%;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        .cadastro-box {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #222;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 14px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+
+        button:hover {
+            background: #005ea6;
+        }
+
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 15px;
+        }
+
+        .login-link a {
+            color: #0078d4;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-banner">
+        <img src="{{ url_for('static', filename='login.png') }}" alt="Logo">
+    </div>
+
+    <div class="container">
+        <div class="cadastro-box">
+            <h2>📋 Cadastro de Advogado</h2>
+
+            <form method="POST" action="/cadastro">
+                <input type="text" name="nome" placeholder="Nome completo" required>
+                <input type="text" name="oab" placeholder="Número da OAB" required>
+                <input type="text" name="estado" placeholder="Estado (UF)" required>
+                <input type="text" name="cidade" placeholder="Cidade" required>
+                <input type="text" name="telefone" placeholder="Telefone" required>
+                <input type="email" name="email" placeholder="Email" required>
+                <input type="password" name="senha" placeholder="Senha" required>
+
+                <button type="submit">Cadastrar</button>
+            </form>
+
+            <div class="login-link">
+                Já tem conta?
+                <a href="/login-page">Fazer login</a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

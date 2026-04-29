@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Casa da Advocacia Hélio Xavier de Vasconcelos</title>
+
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5f7fa;
+}
+
+.topo {
+    background: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.container {
+    padding: 20px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+}
+
+button {
+    background: #0078d4;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+button:hover {
+    background: #005ea6;
+}
+
+#calendar {
+    margin-top: 20px;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    width: 400px;
+}
+
+input, select {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.info-dia {
+    background: #f0f6ff;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    color: #005ea6;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topo">
+    <div>
+        <h1>Casa da Advocacia Hélio Xavier de Vasconcelos</h1>
+        <p>Agenda mensal de salas</p>
+    </div>
+
+    <div>
+        <strong id="usuario-info">Carregando usuário...</strong><br>
+        <span id="contador">Carregando...</span><br>
+        <button onclick="window.location.href='/logout'">Sair</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="card">
+        <h2>Calendário Mensal</h2>
+        <p>Clique em um dia para realizar um agendamento. Clique em um agendamento para cancelar.</p>
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<div class="modal" id="modalAgendamento">
+    <div class="modal-content">
+        <h2>Novo Agendamento</h2>
+
+        <div class="info-dia" id="diaSelecionadoTexto">
+            Dia selecionado:
+        </div>
+
+        <label>Sala</label>
+        <select id="sala_id" onchange="calcularHorarioFinal()">
+            <option value="">Selecione a sala</option>
+        </select>
+
+        <label>Horário de início</label>
+        <select id="data_inicio" onchange="calcularHorarioFinal()">
+            <option value="">Selecione o horário</option>
+            <option value="08:00">08:00</option>
+            <option value="09:00">09:00</option>
+            <option value="10:00">10:00</option>
+            <option value="11:00">11:00</option>
+            <option value="12:00">12:00</option>
+            <option value="13:00">13:00</option>
+            <option value="14:00">14:00</option>
+            <option value="15:00">15:00</option>
+            <option value="16:00">16:00</option>
+            <option value="17:00">17:00</option>
+            <option value="18:00">18:00</option>
+        </select>
+
+        <label>Horário final automático</label>
+        <input type="time" id="data_fim" readonly>
+
+        <button onclick="salvarAgendamento()">Confirmar</button>
+        <button onclick="fecharModal()">Cancelar</button>
+    </div>
+</div>
+
+<div class="modal" id="modalCancelar">
+    <div class="modal-content">
+        <h2>Cancelar Agendamento</h2>
+
+        <div class="info-dia" id="cancelarInfo">
+            Carregando informações...
+        </div>
+
+        <p>Deseja realmente cancelar este agendamento?</p>
+
+        <button onclick="confirmarCancelamento()">Sim, cancelar</button>
+        <button onclick="fecharModalCancelar()">Voltar</button>
+    </div>
+</div>
+<script>
+
+let agendamentoSelecionado = null;
+let diaSelecionado = null;
+let calendar = null;
+
+function carregarUsuario() {
+    fetch('/usuario')
+    .then(r => r.json())
+    .then(u => {
+        document.getElementById('usuario-info').innerText =
+            `Dr. ${u.nome} - OAB ${u.oab}/${u.estado}`;
+    });
+}
+
+function carregarContador() {
+    fetch('/contador')
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('contador').innerText =
+            `Usados: ${d.usados}/${d.limite} | Restam: ${d.restantes}`;
+    });
+}
+
+function carregarSalas() {
+    fetch('/salas')
+    .then(r => r.json())
+    .then(salas => {
+        const select = document.getElementById('sala_id');
+        select.innerHTML = '<option value="">Selecione a sala</option>';
+
+        salas.forEach(sala => {
+            select.innerHTML += `
+                <option value="${sala[0]}">${sala[1]}</option>
+            `;
+        });
+    });
+}
+
+function calcularHorarioFinal() {
+    const horaInicio = document.getElementById('data_inicio').value;
+    const salaSelect = document.getElementById('sala_id');
+    const nomeSala = salaSelect.options[salaSelect.selectedIndex]?.text || "";
+    const fimInput = document.getElementById('data_fim');
+
+    if (!horaInicio || !nomeSala) return;
+
+    let [horas, minutos] = horaInicio.split(':').map(Number);
+
+    let duracaoHoras = 2;
+
+    if (nomeSala.includes('Coworking')) {
+        duracaoHoras = 3;
+    } else if (nomeSala.includes('Sala de Reunião')) {
+        duracaoHoras = 2;
+    } else if (nomeSala.includes('Escritório 01')) {
+        duracaoHoras = 2;
+    } else if (nomeSala.includes('Escritório 02')) {
+        duracaoHoras = 2;
+    } else if (nomeSala.includes('Sala de Audiência')) {
+        duracaoHoras = 3;
+    } else if (nomeSala.includes('Auditório')) {
+        duracaoHoras = 5;
+    }
+
+    horas += duracaoHoras;
+
+    const horaFinal = String(horas).padStart(2, '0');
+    const minutoFinal = String(minutos).padStart(2, '0');
+
+    fimInput.value = `${horaFinal}:${minutoFinal}`;
+}
+
+function abrirModal(data) {
+    diaSelecionado = data;
+
+    const partes = data.split('-');
+    const dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+
+    document.getElementById('diaSelecionadoTexto').innerText =
+        `Dia selecionado: ${dataFormatada}`;
+
+    document.getElementById('modalAgendamento').style.display = 'flex';
+}
+
+function fecharModal() {
+    document.getElementById('modalAgendamento').style.display = 'none';
+
+    document.getElementById('sala_id').value = '';
+    document.getElementById('data_inicio').value = '';
+    document.getElementById('data_fim').value = '';
+    diaSelecionado = null;
+}
+
+function salvarAgendamento() {
+    const salaId = document.getElementById('sala_id').value;
+    const horaInicio = document.getElementById('data_inicio').value;
+    const horaFim = document.getElementById('data_fim').value;
+
+    if (!diaSelecionado || !salaId || !horaInicio || !horaFim) {
+        alert('Preencha todos os campos antes de confirmar.');
+        return;
+    }
+
+    const dataInicio = `${diaSelecionado}T${horaInicio}`;
+    const dataFim = `${diaSelecionado}T${horaFim}`;
+
+    fetch('/agendar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sala_id: salaId,
+            data_inicio: dataInicio,
+            data_fim: dataFim
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.mensagem || data.erro);
+
+        if (data.mensagem) {
+            fecharModal();
+            carregarContador();
+
+            if (calendar) {
+                calendar.refetchEvents();
+            }
+        }
+    })
+    .catch(error => {
+        console.error(error);
+        alert('Erro ao realizar agendamento.');
+    });
+}
+function abrirModalCancelar(evento) {
+    agendamentoSelecionado = evento.id;
+
+    document.getElementById('cancelarInfo').innerText =
+        evento.title;
+
+    document.getElementById('modalCancelar').style.display = 'flex';
+}
+
+function fecharModalCancelar() {
+    document.getElementById('modalCancelar').style.display = 'none';
+    agendamentoSelecionado = null;
+}
+
+function confirmarCancelamento() {
+    if (!agendamentoSelecionado) {
+        alert('Nenhum agendamento selecionado.');
+        return;
+    }
+
+    fetch(`/cancelar-agendamento/${agendamentoSelecionado}`, {
+        method: 'POST'
+    })
+    .then(r => r.json())
+    .then(d => {
+        alert(d.mensagem || d.erro);
+
+        if (d.mensagem) {
+            fecharModalCancelar();
+            calendar.refetchEvents();
+            carregarContador();
+        }
+    })
+    .catch(error => {
+        console.error(error);
+        alert('Erro ao cancelar agendamento.');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    carregarUsuario();
+    carregarContador();
+    carregarSalas();
+
+    const calendarEl = document.getElementById('calendar');
+
+    calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pt-br',
+        height: "auto",
+
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: ''
+        },
+
+        events: '/agendamentos',
+
+        dateClick: function(info) {
+            abrirModal(info.dateStr);
+        },
+
+eventClick: function(info) {
+    abrirModalCancelar(info.event);
+}
+    });
+
+    calendar.render();
+});
+</script>
+
+</body>
+</html>

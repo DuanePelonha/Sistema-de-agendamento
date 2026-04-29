@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sistema de Agendamento</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f3f5f7;
+            min-height: 100vh;
+        }
+
+        .top-banner {
+            width: 100%;
+            height: 180px;
+            background: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .top-banner img {
+            max-width: 500px;
+            width: 90%;
+            height: auto;
+            object-fit: contain;
+        }
+
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 40px;
+            padding: 20px;
+        }
+
+        .login-box {
+            width: 100%;
+            max-width: 420px;
+            background: white;
+            padding: 35px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .login-box h2 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #222;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005ea6;
+        }
+
+        .cadastro-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 15px;
+        }
+
+        .cadastro-link a {
+            color: #0078d4;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-banner">
+        <img src="{{ url_for('static', filename='login.png') }}" alt="Logo">
+    </div>
+
+    <div class="login-container">
+        <div class="login-box">
+            <h2>🔐 Login</h2>
+
+            <form method="POST" action="/login">
+                <input type="email" name="email" placeholder="Email" required>
+                <input type="password" name="senha" placeholder="Senha" required>
+
+                <button type="submit">
+                    Entrar
+                </button>
+            </form>
+
+            <div class="cadastro-link">
+                Não tem conta?
+                <a href="/cadastro-page">Cadastrar</a>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
