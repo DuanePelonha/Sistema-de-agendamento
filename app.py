@@ -342,7 +342,7 @@ def corrigir_salas():
 
     cursor.execute("DELETE FROM salas")
 
-    salas = [(f"Coworking {i:02d}",) for i in range(1, 8)]
+    salas = [(f"Coworking {i:02d}",) for i in range(1, 11)]
     salas += [
         ("Sala de Reunião",),
         ("Escritório 01",),
@@ -356,7 +356,7 @@ def corrigir_salas():
     conn.commit()
     conn.close()
 
-    return "Salas corrigidas com sucesso!"
+    return "Salas criadas com sucesso!"
 
 @app.route("/usuario")
 def usuario():
