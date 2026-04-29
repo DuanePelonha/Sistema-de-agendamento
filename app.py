@@ -7,6 +7,12 @@ from datetime import datetime
 from email.mime.text import MIMEText
 from flask import Flask, render_template, request, redirect, session, jsonify, Response
 
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+
 app = Flask(__name__)
 app.secret_key = "agendamento_advogados_2026_sistema"
 
@@ -19,6 +25,9 @@ ADMIN_SENHA = "admin123"
 EMAIL_REMETENTE = os.environ.get("EMAIL_REMETENTE")
 EMAIL_SENHA_APP = os.environ.get("EMAIL_SENHA_APP")
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+USANDO_POSTGRES = bool(DATABASE_URL)
+
 LIMITES_SALAS = {
     "Coworking": 180,
     "Sala de Reunião": 120,
@@ -30,7 +39,14 @@ LIMITES_SALAS = {
 
 
 def conectar():
+    if USANDO_POSTGRES:
+        return psycopg2.connect(DATABASE_URL)
+
     return sqlite3.connect("banco.db")
+
+
+def ph():
+    return "%s" if USANDO_POSTGRES else "?"
 
 
 def enviar_email(destinatario, assunto, mensagem):
@@ -57,47 +73,74 @@ def inicializar_banco():
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS advogados (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        senha TEXT NOT NULL,
-        oab TEXT NOT NULL,
-        estado TEXT NOT NULL,
-        cidade TEXT NOT NULL,
-        telefone TEXT
-    )
-    """)
+    if USANDO_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS advogados (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            oab TEXT NOT NULL,
+            estado TEXT NOT NULL,
+            cidade TEXT NOT NULL,
+            telefone TEXT
+        )
+        """)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS salas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL
-    )
-    """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS salas (
+            id SERIAL PRIMARY KEY,
+            nome TEXT NOT NULL
+        )
+        """)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS agendamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        advogado_id INTEGER NOT NULL,
-        sala_id INTEGER NOT NULL,
-        data_inicio TEXT NOT NULL,
-        data_fim TEXT NOT NULL,
-        status TEXT DEFAULT 'ativo',
-        confirmado TEXT DEFAULT 'nao',
-        aviso_enviado TEXT DEFAULT 'nao'
-    )
-    """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agendamentos (
+            id SERIAL PRIMARY KEY,
+            advogado_id INTEGER NOT NULL,
+            sala_id INTEGER NOT NULL,
+            data_inicio TEXT NOT NULL,
+            data_fim TEXT NOT NULL,
+            status TEXT DEFAULT 'ativo',
+            confirmado TEXT DEFAULT 'nao',
+            aviso_enviado TEXT DEFAULT 'nao'
+        )
+        """)
+    else:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS advogados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            oab TEXT NOT NULL,
+            estado TEXT NOT NULL,
+            cidade TEXT NOT NULL,
+            telefone TEXT
+        )
+        """)
 
-    for coluna in ["confirmado", "aviso_enviado"]:
-        try:
-            cursor.execute(f"ALTER TABLE agendamentos ADD COLUMN {coluna} TEXT DEFAULT 'nao'")
-        except sqlite3.OperationalError:
-            pass
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS salas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agendamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            advogado_id INTEGER NOT NULL,
+            sala_id INTEGER NOT NULL,
+            data_inicio TEXT NOT NULL,
+            data_fim TEXT NOT NULL,
+            status TEXT DEFAULT 'ativo',
+            confirmado TEXT DEFAULT 'nao',
+            aviso_enviado TEXT DEFAULT 'nao'
+        )
+        """)
 
     criar_salas_padrao(cursor)
-
     conn.commit()
     conn.close()
 
@@ -116,7 +159,7 @@ def criar_salas_padrao(cursor):
             ("Auditório",)
         ]
 
-        cursor.executemany("INSERT INTO salas (nome) VALUES (?)", salas)
+        cursor.executemany("INSERT INTO salas (nome) VALUES (" + ph() + ")", salas)
 
 
 def verificar_confirmacoes():
@@ -140,18 +183,16 @@ def verificar_confirmacoes():
         minutos_apos_inicio = (agora - inicio).total_seconds() / 60
 
         if 0 <= minutos_para_inicio <= 15 and aviso_enviado == "nao":
-            cursor.execute("""
-                UPDATE agendamentos
-                SET aviso_enviado = 'sim'
-                WHERE id = ?
-            """, (ag_id,))
+            cursor.execute(
+                f"UPDATE agendamentos SET aviso_enviado = 'sim' WHERE id = {ph()}",
+                (ag_id,)
+            )
 
         if minutos_apos_inicio > 15 and confirmado != "sim":
-            cursor.execute("""
-                UPDATE agendamentos
-                SET status = 'cancelado'
-                WHERE id = ?
-            """, (ag_id,))
+            cursor.execute(
+                f"UPDATE agendamentos SET status = 'cancelado' WHERE id = {ph()}",
+                (ag_id,)
+            )
 
     conn.commit()
     conn.close()
@@ -166,22 +207,19 @@ def verificar_limite_mensal(advogado_id, data_referencia):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    mes_ref = data_referencia.strftime("%Y-%m")
+    query = f"""
         SELECT COUNT(*)
         FROM agendamentos
-        WHERE advogado_id = ?
-        AND strftime('%m', data_inicio) = ?
-        AND strftime('%Y', data_inicio) = ?
+        WHERE advogado_id = {ph()}
+        AND data_inicio LIKE {ph()}
         AND status = 'ativo'
-    """, (
-        advogado_id,
-        data_referencia.strftime("%m"),
-        data_referencia.strftime("%Y")
-    ))
+    """
 
+    cursor.execute(query, (advogado_id, f"{mes_ref}%"))
     total = cursor.fetchone()[0]
-    conn.close()
 
+    conn.close()
     return total < LIMITE_MENSAL
 
 
@@ -189,20 +227,19 @@ def verificar_agendamento_dia(advogado_id, data_referencia):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    dia_ref = data_referencia.strftime("%Y-%m-%d")
+    query = f"""
         SELECT COUNT(*)
         FROM agendamentos
-        WHERE advogado_id = ?
-        AND date(data_inicio) = ?
+        WHERE advogado_id = {ph()}
+        AND data_inicio LIKE {ph()}
         AND status = 'ativo'
-    """, (
-        advogado_id,
-        data_referencia.strftime("%Y-%m-%d")
-    ))
+    """
 
+    cursor.execute(query, (advogado_id, f"{dia_ref}%"))
     total = cursor.fetchone()[0]
-    conn.close()
 
+    conn.close()
     return total == 0
 
 
@@ -210,21 +247,22 @@ def verificar_conflito_horario(sala_id, inicio, fim):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = f"""
         SELECT COUNT(*)
         FROM agendamentos
-        WHERE sala_id = ?
+        WHERE sala_id = {ph()}
         AND status = 'ativo'
         AND (
-            (data_inicio < ? AND data_fim > ?)
+            (data_inicio < {ph()} AND data_fim > {ph()})
             OR
-            (data_inicio >= ? AND data_inicio < ?)
+            (data_inicio >= {ph()} AND data_inicio < {ph()})
         )
-    """, (sala_id, fim, inicio, inicio, fim))
+    """
 
+    cursor.execute(query, (sala_id, fim, inicio, inicio, fim))
     conflito = cursor.fetchone()[0] > 0
-    conn.close()
 
+    conn.close()
     return conflito
 
 
@@ -270,15 +308,16 @@ def cadastro():
     cursor = conn.cursor()
 
     try:
-        cursor.execute("""
+        query = f"""
             INSERT INTO advogados
             (nome, email, senha, oab, estado, cidade, telefone)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (nome, email, senha, oab, estado, cidade, telefone))
+            VALUES ({ph()}, {ph()}, {ph()}, {ph()}, {ph()}, {ph()}, {ph()})
+        """
 
+        cursor.execute(query, (nome, email, senha, oab, estado, cidade, telefone))
         conn.commit()
 
-    except sqlite3.IntegrityError:
+    except Exception:
         conn.close()
         return "<script>alert('Email já cadastrado'); window.location='/cadastro-page';</script>"
 
@@ -294,13 +333,15 @@ def login():
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = f"""
         SELECT id, nome, oab, estado
         FROM advogados
-        WHERE email = ? AND senha = ?
-    """, (email, senha))
+        WHERE email = {ph()} AND senha = {ph()}
+    """
 
+    cursor.execute(query, (email, senha))
     usuario = cursor.fetchone()
+
     conn.close()
 
     if usuario:
@@ -362,7 +403,7 @@ def corrigir_salas():
         ("Auditório",)
     ]
 
-    cursor.executemany("INSERT INTO salas (nome) VALUES (?)", salas)
+    cursor.executemany("INSERT INTO salas (nome) VALUES (" + ph() + ")", salas)
 
     conn.commit()
     conn.close()
@@ -376,25 +417,22 @@ def contador():
         return jsonify({"erro": "Não autenticado"}), 401
 
     advogado_id = session["usuario_id"]
-    hoje = datetime.now()
+    mes_ref = datetime.now().strftime("%Y-%m")
 
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = f"""
         SELECT COUNT(*)
         FROM agendamentos
-        WHERE advogado_id = ?
-        AND strftime('%m', data_inicio) = ?
-        AND strftime('%Y', data_inicio) = ?
+        WHERE advogado_id = {ph()}
+        AND data_inicio LIKE {ph()}
         AND status = 'ativo'
-    """, (
-        advogado_id,
-        hoje.strftime("%m"),
-        hoje.strftime("%Y")
-    ))
+    """
 
+    cursor.execute(query, (advogado_id, f"{mes_ref}%"))
     usados = cursor.fetchone()[0]
+
     conn.close()
 
     return jsonify({
@@ -466,7 +504,8 @@ def agendar():
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT nome FROM salas WHERE id = ?", (sala_id,))
+    query = f"SELECT nome FROM salas WHERE id = {ph()}"
+    cursor.execute(query, (sala_id,))
     sala = cursor.fetchone()
 
     if not sala:
@@ -491,18 +530,21 @@ def agendar():
         conn.close()
         return jsonify({"erro": "Sala já ocupada nesse horário"}), 400
 
-    cursor.execute("""
+    query = f"""
         INSERT INTO agendamentos
         (advogado_id, sala_id, data_inicio, data_fim, status, confirmado, aviso_enviado)
-        VALUES (?, ?, ?, ?, 'ativo', 'nao', 'nao')
-    """, (advogado_id, sala_id, data_inicio, data_fim))
+        VALUES ({ph()}, {ph()}, {ph()}, {ph()}, 'ativo', 'nao', 'nao')
+    """
 
+    cursor.execute(query, (advogado_id, sala_id, data_inicio, data_fim))
     conn.commit()
 
-    cursor.execute("SELECT nome, email FROM advogados WHERE id = ?", (advogado_id,))
+    query = f"SELECT nome, email FROM advogados WHERE id = {ph()}"
+    cursor.execute(query, (advogado_id,))
     advogado = cursor.fetchone()
 
-    mensagem = f"""
+    if advogado:
+        mensagem = f"""
 Olá, Dr(a). {advogado[0]}.
 
 Seu agendamento foi confirmado.
@@ -511,13 +553,10 @@ Sala: {nome_sala}
 Início: {data_inicio}
 Fim: {data_fim}
 
-Você receberá aviso 15 minutos antes.
-Caso não confirme presença até 15 minutos após o horário agendado, o agendamento poderá ser cancelado automaticamente.
-
 Casa da Advocacia Hélio Xavier de Vasconcelos
 """
 
-    enviar_email(advogado[1], "Confirmação de Agendamento", mensagem)
+        enviar_email(advogado[1], "Confirmação de Agendamento", mensagem)
 
     conn.close()
 
@@ -534,12 +573,13 @@ def confirmar_agendamento(id):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = f"""
         SELECT advogado_id, status
         FROM agendamentos
-        WHERE id = ?
-    """, (id,))
+        WHERE id = {ph()}
+    """
 
+    cursor.execute(query, (id,))
     agendamento = cursor.fetchone()
 
     if not agendamento:
@@ -554,11 +594,8 @@ def confirmar_agendamento(id):
         conn.close()
         return jsonify({"erro": "Este agendamento não está ativo"}), 400
 
-    cursor.execute("""
-        UPDATE agendamentos
-        SET confirmado = 'sim'
-        WHERE id = ?
-    """, (id,))
+    query = f"UPDATE agendamentos SET confirmado = 'sim' WHERE id = {ph()}"
+    cursor.execute(query, (id,))
 
     conn.commit()
     conn.close()
@@ -576,7 +613,7 @@ def cancelar_agendamento(id):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
+    query = f"""
         SELECT 
             ag.advogado_id,
             ag.data_inicio,
@@ -588,9 +625,10 @@ def cancelar_agendamento(id):
         FROM agendamentos ag
         JOIN advogados adv ON adv.id = ag.advogado_id
         JOIN salas s ON s.id = ag.sala_id
-        WHERE ag.id = ?
-    """, (id,))
+        WHERE ag.id = {ph()}
+    """
 
+    cursor.execute(query, (id,))
     agendamento = cursor.fetchone()
 
     if not agendamento:
@@ -614,12 +652,8 @@ def cancelar_agendamento(id):
             "erro": f"Cancelamento bloqueado. Só é permitido cancelar com pelo menos {LIMITE_CANCELAMENTO_HORAS} horas de antecedência."
         }), 400
 
-    cursor.execute("""
-        UPDATE agendamentos
-        SET status = 'cancelado'
-        WHERE id = ?
-    """, (id,))
-
+    query = f"UPDATE agendamentos SET status = 'cancelado' WHERE id = {ph()}"
+    cursor.execute(query, (id,))
     conn.commit()
 
     mensagem = f"""
@@ -704,11 +738,8 @@ def admin_cancelar(id):
     conn = conectar()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE agendamentos
-        SET status = 'cancelado'
-        WHERE id = ?
-    """, (id,))
+    query = f"UPDATE agendamentos SET status = 'cancelado' WHERE id = {ph()}"
+    cursor.execute(query, (id,))
 
     conn.commit()
     conn.close()
