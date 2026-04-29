@@ -382,6 +382,15 @@ eventClick: function(info) {
 
     calendar.render();
 });
+
+function carregarContador() {
+    fetch('/contador')
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('contador').innerText =
+            `Você usou ${d.usados} de ${d.limite}. Restam ${d.restantes}`;
+    });
+}
 </script>
 
 </body>

@@ -210,6 +210,7 @@ def agendar():
     """, (advogado_id, dados["sala_id"], dados["data_inicio"], dados["data_fim"]))
 
     conn.commit()
+    
 
     # EMAIL
     cursor.execute("SELECT nome,email FROM advogados WHERE id=?", (advogado_id,))
@@ -227,6 +228,39 @@ def agendar():
     conn.close()
 
     return jsonify({"mensagem": "Agendamento realizado!"})
+
+@app.route("/contador")
+def contador():
+    if "usuario_id" not in session:
+        return jsonify({"erro": "Não autenticado"}), 401
+
+    advogado_id = session["usuario_id"]
+    hoje = datetime.now()
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM agendamentos
+        WHERE advogado_id = ?
+        AND strftime('%m', data_inicio) = ?
+        AND strftime('%Y', data_inicio) = ?
+        AND status = 'ativo'
+    """, (
+        advogado_id,
+        hoje.strftime("%m"),
+        hoje.strftime("%Y")
+    ))
+
+    usados = cursor.fetchone()[0]
+    conn.close()
+
+    return jsonify({
+        "usados": usados,
+        "limite": LIMITE_MENSAL,
+        "restantes": LIMITE_MENSAL - usados
+    })
 
 @app.route("/cancelar-agendamento/<int:id>", methods=["POST"])
 def cancelar(id):
