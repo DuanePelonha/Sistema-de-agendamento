@@ -314,6 +314,17 @@ def corrigir_salas():
 
     return "Salas corrigidas com sucesso!"
 
+@app.route("/usuario")
+def usuario():
+    if "usuario_id" not in session:
+        return jsonify({"erro": "Não autenticado"}), 401
+
+    return jsonify({
+        "nome": session.get("nome"),
+        "oab": session.get("oab"),
+        "estado": session.get("estado")
+    })
+
 if __name__ == "__main__":
     inicializar_banco()
     app.run(debug=True)
