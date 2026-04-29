@@ -200,6 +200,7 @@ def verificar_confirmacoes():
 
 @app.before_request
 def before_request():
+    inicializar_banco()
     verificar_confirmacoes()
 
 
